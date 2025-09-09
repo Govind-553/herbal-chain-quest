@@ -22,6 +22,12 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          light: "hsl(var(--primary-light))",
+        },
+        trust: {
+          green: "hsl(var(--trust-green))",
+          yellow: "hsl(var(--trust-yellow))",
+          red: "hsl(var(--trust-red))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
