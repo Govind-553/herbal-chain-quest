@@ -7,6 +7,7 @@ import labRoutes from "./routes/labRoutes.js";
 import processorRoutes from "./routes/processorRoutes.js";
 import consumerRoutes from "./routes/consumerRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import dummyAuthMiddleware from "./middleware/auth.js";
 
 dotenv.config();
 connectDB();
@@ -20,11 +21,14 @@ app.get("/", (req, res) => {
   res.send("AyurChain Backend is running!");
 });
 
+app.use(dummyAuthMiddleware);
+
 app.use("/collector", collectorRoutes);
 app.use("/labtest", labRoutes);
 app.use("/processor", processorRoutes);
-app.use("/consumer", consumerRoutes);
 app.use("/dashboard", dashboardRoutes);
+
+app.use("/consumer", consumerRoutes);
 
 const PORT = process.env.PORT || 3000;
 
