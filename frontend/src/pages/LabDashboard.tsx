@@ -89,7 +89,8 @@ const LabDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="container mx-auto p-6">
+      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
+      <div className="container mx-auto p-6 pt-[72px]">
         <div className="flex items-center gap-3 mb-8">
           <FlaskConical className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Lab Dashboard</h1>

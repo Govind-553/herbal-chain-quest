@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Package, QrCode, CheckCircle, Clock, Search } from "lucide-react";
+import { Package, QrCode, CheckCircle, Clock, Search, Download, X } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface ProcessingStep {
@@ -23,6 +23,8 @@ const ProcessorDashboard = () => {
   const [batchId, setBatchId] = useState("");
   const [qrCodeData, setQrCodeData] = useState("");
   const [isFinalized, setIsFinalized] = useState(false);
+  const qrCodeRef = useRef(null);
+
   const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([
     { id: "drying", name: "Drying", completed: false },
     { id: "cleaning", name: "Cleaning & Sorting", completed: false },
@@ -90,6 +92,72 @@ const ProcessorDashboard = () => {
     });
   };
 
+  const handleDownloadQR = () => {
+    if (!qrCodeRef.current) {
+      toast({
+        title: "Download Failed",
+        description: "QR code not available for download.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Find the SVG element and create a canvas element to draw it to
+    const svgElement = qrCodeRef.current.querySelector('svg');
+    if (!svgElement) {
+        toast({
+            title: "Download Failed",
+            description: "QR code SVG element not found.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const svgWidth = svgElement.width.baseVal.value;
+    const svgHeight = svgElement.height.baseVal.value;
+    canvas.width = svgWidth;
+    canvas.height = svgHeight;
+
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    // Use a temporary URL to load the SVG onto the canvas
+    const svgString = new XMLSerializer().serializeToString(svgElement);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      
+      // Convert the canvas content to a PNG data URL
+      const pngUrl = canvas.toDataURL("image/png");
+      
+      const downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = `qr-code-${batchId}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      toast({
+        title: "Download Initiated",
+        description: `Downloading QR code for batch ${batchId}.`,
+      });
+    };
+    img.src = url;
+  };
+  
+  const handleClear = () => {
+    setBatchId("");
+    setQrCodeData("");
+    setIsFinalized(false);
+    setProcessingSteps(prev => 
+      prev.map(step => ({ ...step, completed: false, timestamp: undefined, notes: undefined }))
+    );
+  };
+
   const completedSteps = processingSteps.filter(step => step.completed).length;
   const progressPercentage = (completedSteps / processingSteps.length) * 100;
 
@@ -97,7 +165,8 @@ const ProcessorDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="container mx-auto p-6">
+      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
+      <div className="container mx-auto p-6 pt-[72px]">
         <div className="flex items-center gap-3 mb-8">
           <Package className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Processor Dashboard</h1>
@@ -117,13 +186,25 @@ const ProcessorDashboard = () => {
                 <div className="space-y-2">
                   <Label htmlFor="batchId">Batch ID</Label>
                   <div className="flex gap-2">
-                    <Input
-                      id="batchId"
-                      placeholder="e.g., AYR-ABC123"
-                      value={batchId}
-                      onChange={(e) => setBatchId(e.target.value)}
-                      className="flex-1"
-                    />
+                    <div className="relative flex-1 flex items-center">
+                      <Input
+                        id="batchId"
+                        placeholder="e.g., AYR-ABC123"
+                        value={batchId}
+                        onChange={(e) => setBatchId(e.target.value)}
+                        className="pr-8"
+                      />
+                      {batchId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleClear}
+                          className="absolute right-1 w-7 h-7"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                     <Button variant="outline" size="icon">
                       <Search className="h-4 w-4" />
                     </Button>
@@ -157,31 +238,29 @@ const ProcessorDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {processingSteps.map((step, index) => (
+                  {processingSteps.map((step) => (
                     <div key={step.id} className="border border-border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant={step.completed ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => toggleStep(step.id)}
-                            className="flex items-center gap-2"
-                          >
-                            {step.completed ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : (
-                              <Clock className="h-4 w-4" />
-                            )}
-                            {step.completed ? "Completed" : "Mark Complete"}
-                          </Button>
-                          <div>
-                            <p className="font-semibold">{step.name}</p>
-                            {step.timestamp && (
-                              <p className="text-xs text-muted-foreground">
-                                Completed: {step.timestamp}
-                              </p>
-                            )}
-                          </div>
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <Button
+                          variant={step.completed ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => toggleStep(step.id)}
+                          className="flex items-center gap-2"
+                        >
+                          {step.completed ? (
+                            <CheckCircle className="h-4 w-4" />
+                          ) : (
+                            <Clock className="h-4 w-4" />
+                          )}
+                          {step.completed ? "Completed" : "Mark Complete"}
+                        </Button>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold">{step.name}</p>
+                          {step.timestamp && (
+                            <p className="text-xs text-muted-foreground">
+                              Completed: {step.timestamp}
+                            </p>
+                          )}
                         </div>
                       </div>
                       
@@ -210,11 +289,11 @@ const ProcessorDashboard = () => {
                     QR Code Generated
                   </CardTitle>
                   <CardDescription>
-                    Judges can scan this QR code to view the complete batch information.
+                    Scan this QR code to view the complete batch information.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="text-center space-y-4">
-                  <div className="bg-card p-6 rounded-lg border-2 border-dashed border-border inline-block">
+                  <div className="bg-card p-6 rounded-lg border-2 border-dashed border-border inline-block" ref={qrCodeRef}>
                     <QRCode
                       value={qrCodeData}
                       size={200}
@@ -228,7 +307,8 @@ const ProcessorDashboard = () => {
                       QR Code contains batch verification data and consumer portal link
                     </p>
                   </div>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" onClick={handleDownloadQR} className="w-full">
+                    <Download className="h-4 w-4 mr-2" />
                     Download QR Code
                   </Button>
                 </CardContent>

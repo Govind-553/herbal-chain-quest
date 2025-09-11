@@ -28,7 +28,7 @@ export const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className="bg-card border-b border-border p-4 shadow-sm">
+    <nav className="bg-card border-b border-border p-4 shadow-sm fixed top-0 w-full z-50">
       <div className="container mx-auto flex items-center justify-between">
         {/* AyurChain Logo & Title */}
         <Link to="/" className="flex items-center gap-2 text-2xl font-bold text-primary">

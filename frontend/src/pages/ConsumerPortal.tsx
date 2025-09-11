@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, QrCode, MapPin, Calendar, User, CheckCircle2, Globe } from "lucide-react";
+import { Search, QrCode, MapPin, Calendar, User, CheckCircle2, Globe, X } from "lucide-react";
 
 interface BatchInfo {
   batchId: string;
@@ -40,20 +40,20 @@ const mockBatchData: BatchInfo = {
     location: "Wayanad District, Kerala",
     coordinates: { lat: 11.6854, lng: 76.1320 }
   },
-  harvestDate: "2024-01-10",
+  harvestDate: "2025-01-10",
   labTest: {
-    date: "2024-01-12",
+    date: "2025-01-12",
     moistureLevel: 12.3,
     pesticideResult: "Pass",
     trustBadge: "green"
   },
   processing: {
-    date: "2024-01-15",
+    date: "2025-01-15",
     steps: ["Drying", "Cleaning & Sorting", "Processing", "Packaging", "Quality Check"],
     processor: "AyurChain Certified Processor"
   },
   globalReady: true,
-  qrGenerated: "2024-01-16T10:30:00Z"
+  qrGenerated: "2025-01-16T10:30:00Z"
 };
 
 const ConsumerPortal = () => {
@@ -62,8 +62,8 @@ const ConsumerPortal = () => {
   const [batchInfo, setBatchInfo] = useState<BatchInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
+  const handleSearch = async (query: string = searchQuery) => {
+    if (!query.trim()) {
       toast({
         title: "Enter Batch ID",
         description: "Please enter a batch ID to search for product information.",
@@ -76,13 +76,14 @@ const ConsumerPortal = () => {
     
     // Simulate API call
     setTimeout(() => {
-      if (searchQuery.toUpperCase().includes("AYR") || searchQuery.includes("XYZ789")) {
+      if (query.toUpperCase().includes("AYR") || query.includes("XYZ789")) {
         setBatchInfo(mockBatchData);
         toast({
           title: "Product Found!",
           description: `Retrieved information for batch ${mockBatchData.batchId}`,
         });
       } else {
+        setBatchInfo(null);
         toast({
           title: "Batch Not Found",
           description: "Please check the batch ID and try again.",
@@ -91,6 +92,25 @@ const ConsumerPortal = () => {
       }
       setIsLoading(false);
     }, 1500);
+  };
+
+  const handleQrScan = () => {
+    toast({
+      title: "QR Code Scan Initiated",
+      description: "Accessing camera to scan QR code...",
+    });
+
+    // Simulate a successful scan after a delay
+    setTimeout(() => {
+        const scannedData = "AYR-XYZ789";
+        setSearchQuery(scannedData);
+        handleSearch(scannedData);
+    }, 2000);
+  };
+
+  const handleClear = () => {
+    setSearchQuery("");
+    setBatchInfo(null);
   };
 
   const timelineSteps = [
@@ -121,7 +141,8 @@ const ConsumerPortal = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="container mx-auto p-6">
+      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
+      <div className="container mx-auto p-6 pt-[72px]">
         <div className="flex items-center gap-3 mb-8">
           <Search className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Consumer Portal</h1>
@@ -136,25 +157,45 @@ const ConsumerPortal = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
-                <div className="flex gap-2">
+                <div className="relative flex items-center">
                   <Input
                     placeholder="Enter Batch ID (e.g., AYR-XYZ789)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    className="flex-1"
+                    className="pr-8" // Adjusted padding for the clear button
                   />
-                  <Button onClick={handleSearch} disabled={isLoading}>
-                    {isLoading ? "Searching..." : "Search"}
-                  </Button>
+                  {searchQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleClear}
+                      className="absolute right-1 w-7 h-7"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
-              <Button variant="outline" className="flex items-center gap-2">
-                <QrCode className="h-4 w-4" />
-                Scan QR Code
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  onClick={() => handleSearch()} 
+                  disabled={isLoading} 
+                  className="w-full sm:w-auto"
+                >
+                  {isLoading ? "Searching..." : "Search"}
+                </Button>
+                <Button 
+                  onClick={handleQrScan} 
+                  variant="outline" 
+                  className="w-full sm:w-auto flex items-center gap-2"
+                >
+                  <QrCode className="h-4 w-4" />
+                  Scan QR Code
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

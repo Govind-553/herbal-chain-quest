@@ -101,7 +101,8 @@ const Analytics = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="container mx-auto p-6">
+      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
+      <div className="container mx-auto p-6 pt-[72px]">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <BarChart3 className="h-8 w-8 text-primary" />
@@ -114,9 +115,9 @@ const Analytics = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="2025">2025</SelectItem>
                 <SelectItem value="2024">2024</SelectItem>
                 <SelectItem value="2023">2023</SelectItem>
-                <SelectItem value="2022">2022</SelectItem>
               </SelectContent>
             </Select>
           </div>
