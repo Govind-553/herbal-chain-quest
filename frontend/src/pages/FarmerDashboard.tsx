@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Sprout, Save, Send, Wifi, WifiOff } from "lucide-react";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://ayurchain-blockchain-based-traceability.onrender.com";
 
 const species = [
   "Tulsi (Holy Basil)",

@@ -21,7 +21,7 @@ import axios from "axios";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button"; // Corrected: Added the import for Button
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://ayurchain-blockchain-based-traceability.onrender.com";
 
 ChartJS.register(
   CategoryScale,

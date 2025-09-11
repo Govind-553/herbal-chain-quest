@@ -10,7 +10,7 @@ import { Shield, Download, Filter, TrendingUp, CheckCircle2, Cloud, HardDrive } 
 import axios from "axios";
 import { useToast } from "@/components/ui/use-toast";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://ayurchain-blockchain-based-traceability.onrender.com";
 
 type TrustLevel = "green" | "yellow" | "red";
 

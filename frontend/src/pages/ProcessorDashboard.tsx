@@ -11,7 +11,7 @@ import { Package, QrCode, CheckCircle, Clock, Download, X } from "lucide-react";
 import QRCode from "react-qr-code";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://ayurchain-blockchain-based-traceability.onrender.com";
 
 interface ProcessingStep {
   id: string;
