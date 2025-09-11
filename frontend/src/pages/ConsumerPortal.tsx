@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { TrustBadge } from "@/components/TrustBadge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, QrCode, MapPin, Calendar, User, CheckCircle2, Globe, X } from "lucide-react";
+import { Search, QrCode, MapPin, Calendar, User, CheckCircle2, Globe, X, FlaskConical, Package, Cloud, HardDrive } from "lucide-react";
+import axios from "axios";
+
+const API_BASE_URL = "http://localhost:3000";
 
 interface BatchInfo {
   batchId: string;
@@ -25,7 +28,12 @@ interface BatchInfo {
   };
   processing: {
     date: string;
-    steps: string[];
+    steps: {
+      name: string;
+      completed: boolean;
+      timestamp: string;
+      notes: string;
+    }[];
     processor: string;
   };
   globalReady: boolean;
@@ -49,7 +57,13 @@ const mockBatchData: BatchInfo = {
   },
   processing: {
     date: "2025-01-15",
-    steps: ["Drying", "Cleaning & Sorting", "Processing", "Packaging", "Quality Check"],
+    steps: [
+      { name: "Drying", completed: true, timestamp: "2025-01-15T10:00:00Z", notes: "Notes for drying" },
+      { name: "Cleaning & Sorting", completed: true, timestamp: "2025-01-15T12:00:00Z", notes: "Notes for cleaning" },
+      { name: "Processing", completed: true, timestamp: "2025-01-15T14:00:00Z", notes: "Notes for processing" },
+      { name: "Packaging", completed: true, timestamp: "2025-01-15T16:00:00Z", notes: "Notes for packaging" },
+      { name: "Quality Check", completed: true, timestamp: "2025-01-15T18:00:00Z", notes: "Notes for quality check" },
+    ],
     processor: "AyurChain Certified Processor"
   },
   globalReady: true,
@@ -61,6 +75,7 @@ const ConsumerPortal = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [batchInfo, setBatchInfo] = useState<BatchInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLiveMode, setIsLiveMode] = useState(false);
 
   const handleSearch = async (query: string = searchQuery) => {
     if (!query.trim()) {
@@ -74,35 +89,57 @@ const ConsumerPortal = () => {
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      if (query.toUpperCase().includes("AYR") || query.includes("XYZ789")) {
-        setBatchInfo(mockBatchData);
+    try {
+      if (isLiveMode) {
+        const res = await axios.get(`${API_BASE_URL}/consumer/${query}`);
+        const fetchedBatchInfo = res.data.batchInfo;
+        
+        setBatchInfo({
+          ...fetchedBatchInfo,
+          globalReady: fetchedBatchInfo.labTest?.trustBadge === "green",
+        });
+
         toast({
           title: "Product Found!",
-          description: `Retrieved information for batch ${mockBatchData.batchId}`,
+          description: `Retrieved information for batch ${fetchedBatchInfo.batchId} from live data.`,
         });
       } else {
-        setBatchInfo(null);
-        toast({
-          title: "Batch Not Found",
-          description: "Please check the batch ID and try again.",
-          variant: "destructive"
-        });
+        if (query.toUpperCase() === mockBatchData.batchId) {
+          setBatchInfo(mockBatchData);
+          toast({
+            title: "Product Found!",
+            description: `Retrieved information for batch ${mockBatchData.batchId} from static data.`,
+          });
+        } else {
+          setBatchInfo(null);
+          toast({
+            title: "Batch Not Found",
+            description: "Please check the batch ID and try again.",
+            variant: "destructive"
+          });
+        }
       }
+    } catch (error) {
+      console.error(error);
+      setBatchInfo(null);
+      toast({
+        title: "Search Failed",
+        description: "An error occurred while fetching product information.",
+        variant: "destructive"
+      });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleQrScan = () => {
     toast({
       title: "QR Code Scan Initiated",
-      description: "Accessing camera to scan QR code...",
+      description: "Accessing camera to simulate QR scan...",
     });
 
-    // Simulate a successful scan after a delay
     setTimeout(() => {
-        const scannedData = "AYR-XYZ789";
+        const scannedData = "AYR-XYZ789"; 
         setSearchQuery(scannedData);
         handleSearch(scannedData);
     }, 2000);
@@ -113,27 +150,40 @@ const ConsumerPortal = () => {
     setBatchInfo(null);
   };
 
+  const toggleLiveMode = () => {
+    setIsLiveMode(prev => {
+      const newMode = !prev;
+      toast({
+        title: newMode ? "Live Data Activated" : "Static Data Activated",
+        description: newMode ? "Fetching data from the backend." : "Switched to local mock data.",
+      });
+      setSearchQuery("");
+      setBatchInfo(null);
+      return newMode;
+    });
+  };
+
   const timelineSteps = [
     {
       title: "Harvest",
-      date: batchInfo?.harvestDate,
-      location: batchInfo?.farmer.location,
+      date: batchInfo?.harvestDate ? new Date(batchInfo.harvestDate).toLocaleDateString() : 'N/A',
+      location: batchInfo?.farmer?.location,
       icon: User,
-      details: `Harvested by ${batchInfo?.farmer.name}`
+      details: `Harvested by ${batchInfo?.farmer?.name || 'N/A'}`
     },
     {
       title: "Lab Testing",
-      date: batchInfo?.labTest.date,
+      date: batchInfo?.labTest?.date ? new Date(batchInfo.labTest.date).toLocaleDateString() : 'N/A',
       location: "Certified Lab Facility",
-      icon: Search,
-      details: `Quality tested - ${batchInfo?.labTest.pesticideResult} all standards`
+      icon: FlaskConical,
+      details: `Quality tested - ${batchInfo?.labTest?.pesticideResult || 'N/A'} all standards`
     },
     {
       title: "Processing",
-      date: batchInfo?.processing.date,
-      location: batchInfo?.processing.processor,
-      icon: CheckCircle2,
-      details: `${batchInfo?.processing.steps.length} processing steps completed`
+      date: batchInfo?.processing?.date ? new Date(batchInfo.processing.date).toLocaleDateString() : 'N/A',
+      location: batchInfo?.processing?.processor,
+      icon: Package,
+      details: `${batchInfo?.processing?.steps?.length || 0} processing steps completed`
     }
   ];
 
@@ -141,14 +191,24 @@ const ConsumerPortal = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
       <div className="container mx-auto p-6 pt-[72px]">
-        <div className="flex items-center gap-3 mb-8">
-          <Search className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Consumer Portal</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Search className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold">Consumer Portal</h1>
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleLiveMode}
+            className="flex items-center gap-2"
+          >
+            {isLiveMode ? <Cloud className="h-4 w-4" /> : <HardDrive className="h-4 w-4" />}
+            {isLiveMode ? "Live Data" : "Static Data"}
+          </Button>
         </div>
 
-        {/* Search Section */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Product Traceability Lookup</CardTitle>
@@ -165,7 +225,7 @@ const ConsumerPortal = () => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    className="pr-8" // Adjusted padding for the clear button
+                    className="pr-8"
                   />
                   {searchQuery && (
                     <Button
@@ -200,10 +260,8 @@ const ConsumerPortal = () => {
           </CardContent>
         </Card>
 
-        {/* Batch Information Display */}
         {batchInfo && (
           <div className="space-y-8">
-            {/* Product Header */}
             <Card className="border-2 border-primary">
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -214,7 +272,7 @@ const ConsumerPortal = () => {
                     </CardDescription>
                   </div>
                   <div className="text-right space-y-2">
-                    <TrustBadge level={batchInfo.labTest.trustBadge} />
+                    {batchInfo.labTest?.trustBadge && <TrustBadge level={batchInfo.labTest.trustBadge} />}
                     {batchInfo.globalReady && (
                       <Badge className="bg-accent text-accent-foreground flex items-center gap-1">
                         <Globe className="h-3 w-3" />
@@ -227,7 +285,6 @@ const ConsumerPortal = () => {
             </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Provenance Timeline */}
               <Card>
                 <CardHeader>
                   <CardTitle>Provenance Timeline</CardTitle>
@@ -264,9 +321,7 @@ const ConsumerPortal = () => {
                 </CardContent>
               </Card>
 
-              {/* Farm Origin & Quality Details */}
               <div className="space-y-6">
-                {/* Farm Origin */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -278,32 +333,30 @@ const ConsumerPortal = () => {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Farmer:</span>
-                        <span className="font-semibold">{batchInfo.farmer.name}</span>
+                        <span className="font-semibold">{batchInfo.farmer?.name || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Location:</span>
-                        <span className="font-semibold">{batchInfo.farmer.location}</span>
+                        <span className="font-semibold">{batchInfo.farmer?.location || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Harvest Date:</span>
                         <span className="font-semibold">
-                          {new Date(batchInfo.harvestDate).toLocaleDateString()}
+                          {batchInfo.harvestDate ? new Date(batchInfo.harvestDate).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
                     </div>
                     
-                    {/* Mock Mini Map */}
                     <div className="mt-4 h-32 bg-muted rounded-lg flex items-center justify-center border">
                       <div className="text-center text-muted-foreground">
                         <MapPin className="h-8 w-8 mx-auto mb-2" />
                         <p className="text-sm">Farm Location Map</p>
-                        <p className="text-xs">Kerala, India</p>
+                        <p className="text-xs">{batchInfo.farmer?.location || 'N/A'}</p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Quality Information */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -317,13 +370,13 @@ const ConsumerPortal = () => {
                         <div className="text-center p-3 bg-muted rounded-lg">
                           <p className="text-sm text-muted-foreground">Moisture Level</p>
                           <p className="text-xl font-semibold text-primary">
-                            {batchInfo.labTest.moistureLevel}%
+                            {batchInfo.labTest?.moistureLevel || 'N/A'}%
                           </p>
                         </div>
                         <div className="text-center p-3 bg-muted rounded-lg">
                           <p className="text-sm text-muted-foreground">Pesticide Test</p>
                           <p className="text-xl font-semibold text-trust-green">
-                            {batchInfo.labTest.pesticideResult}
+                            {batchInfo.labTest?.pesticideResult || 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -331,9 +384,9 @@ const ConsumerPortal = () => {
                       <div className="p-3 bg-trust-green/10 rounded-lg text-center">
                         <p className="text-sm text-muted-foreground mb-1">Lab Tested</p>
                         <p className="font-semibold">
-                          {new Date(batchInfo.labTest.date).toLocaleDateString()}
+                          {batchInfo.labTest?.date ? new Date(batchInfo.labTest.date).toLocaleDateString() : 'N/A'}
                         </p>
-                        <TrustBadge level={batchInfo.labTest.trustBadge} className="justify-center mt-2" />
+                        {batchInfo.labTest?.trustBadge && <TrustBadge level={batchInfo.labTest.trustBadge} className="justify-center mt-2" />}
                       </div>
 
                       {batchInfo.globalReady && (
@@ -353,7 +406,6 @@ const ConsumerPortal = () => {
               </div>
             </div>
 
-            {/* Additional Information */}
             <Card>
               <CardHeader>
                 <CardTitle>Processing Information</CardTitle>
@@ -363,10 +415,10 @@ const ConsumerPortal = () => {
                   <div>
                     <h4 className="font-semibold mb-3">Processing Steps Completed:</h4>
                     <div className="space-y-2">
-                      {batchInfo.processing.steps.map((step, index) => (
+                      {batchInfo.processing?.steps?.map((step, index) => (
                         <div key={index} className="flex items-center gap-2">
                           <CheckCircle2 className="h-4 w-4 text-trust-green" />
-                          <span className="text-sm">{step}</span>
+                          <span className="text-sm">{step.name}</span>
                         </div>
                       ))}
                     </div>
@@ -375,9 +427,9 @@ const ConsumerPortal = () => {
                   <div>
                     <h4 className="font-semibold mb-3">Processor Details:</h4>
                     <div className="space-y-2 text-sm">
-                      <p><strong>Facility:</strong> {batchInfo.processing.processor}</p>
-                      <p><strong>Processing Date:</strong> {new Date(batchInfo.processing.date).toLocaleDateString()}</p>
-                      <p><strong>QR Generated:</strong> {new Date(batchInfo.qrGenerated).toLocaleDateString()}</p>
+                      <p><strong>Facility:</strong> {batchInfo.processing?.processor || 'N/A'}</p>
+                      <p><strong>Processing Date:</strong> {batchInfo.processing?.date ? new Date(batchInfo.processing.date).toLocaleDateString() : 'N/A'}</p>
+                      <p><strong>QR Generated:</strong> {batchInfo.qrGenerated ? new Date(batchInfo.qrGenerated).toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
                 </div>
@@ -386,7 +438,6 @@ const ConsumerPortal = () => {
           </div>
         )}
 
-        {/* Instructions when no data */}
         {!batchInfo && (
           <Card>
             <CardContent className="text-center py-12">

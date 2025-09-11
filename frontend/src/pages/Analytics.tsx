@@ -1,8 +1,9 @@
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart3, TrendingUp, Globe, Sprout, Calendar, Target } from "lucide-react";
+import { BarChart3, TrendingUp, Globe, Sprout, Calendar, Target, Cloud, HardDrive } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,11 @@ import {
   LineElement,
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
+import axios from "axios";
+import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button"; // Corrected: Added the import for Button
+
+const API_BASE_URL = "http://localhost:3000";
 
 ChartJS.register(
   CategoryScale,
@@ -29,9 +35,10 @@ ChartJS.register(
   LineElement
 );
 
-const Analytics = () => {
-  // Mock data for charts
-  const batchesHarvestedData = {
+const staticAnalyticsData = {
+  totalBatches: 347,
+  exportReadyPercentage: 92,
+  batchesHarvestedData: {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
       {
@@ -42,9 +49,8 @@ const Analytics = () => {
         borderWidth: 1,
       }
     ]
-  };
-
-  const complianceData = {
+  },
+  complianceData: {
     labels: ["Passed", "Under Review", "Failed"],
     datasets: [
       {
@@ -58,9 +64,8 @@ const Analytics = () => {
         borderColor: "#fff"
       }
     ]
-  };
-
-  const exportReadinessData = {
+  },
+  exportReadinessData: {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
       {
@@ -72,6 +77,62 @@ const Analytics = () => {
         fill: true,
       }
     ]
+  },
+};
+
+const Analytics = () => {
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(staticAnalyticsData);
+  const { toast } = useToast();
+
+  const fetchLiveAnalyticsData = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/dashboard/analytics`);
+      const { totalBatches, trustBadgeCounts } = res.data;
+
+      // Update state with live data from the backend
+      setAnalyticsData({
+        ...staticAnalyticsData, // Keep static chart data for now, or replace it if your API returns it
+        totalBatches,
+        exportReadyPercentage: totalBatches > 0 ? Math.round((trustBadgeCounts.green / totalBatches) * 100) : 0,
+        complianceData: {
+          ...staticAnalyticsData.complianceData,
+          datasets: [
+            {
+              ...staticAnalyticsData.complianceData.datasets[0],
+              data: [trustBadgeCounts.green || 0, trustBadgeCounts.yellow || 0, trustBadgeCounts.red || 0]
+            }
+          ]
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching live analytics data:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not fetch live data. Displaying static data.",
+        variant: "destructive",
+      });
+      setIsLiveMode(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLiveMode) {
+      fetchLiveAnalyticsData();
+    } else {
+      setAnalyticsData(staticAnalyticsData);
+    }
+  }, [isLiveMode]);
+
+  const toggleLiveMode = () => {
+    setIsLiveMode(prev => {
+      const newMode = !prev;
+      toast({
+        title: newMode ? "Live Data Activated" : "Static Data Activated",
+        description: newMode ? "Fetching data from the backend." : "Switched to local mock data.",
+      });
+      return newMode;
+    });
   };
 
   const chartOptions = {
@@ -110,16 +171,15 @@ const Analytics = () => {
           </div>
           
           <div className="flex gap-2">
-            <Select defaultValue="2024">
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2025">2025</SelectItem>
-                <SelectItem value="2024">2024</SelectItem>
-                <SelectItem value="2023">2023</SelectItem>
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleLiveMode}
+              className="flex items-center gap-2"
+            >
+              {isLiveMode ? <Cloud className="h-4 w-4" /> : <HardDrive className="h-4 w-4" />}
+              {isLiveMode ? "Live Data" : "Static Data"}
+            </Button>
           </div>
         </div>
 
@@ -137,7 +197,7 @@ const Analytics = () => {
                   <div className="text-sm text-muted-foreground">Total Herbs This Season (kg)</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-trust-green mb-2">92%</div>
+                  <div className="text-4xl font-bold text-trust-green mb-2">{analyticsData.exportReadyPercentage}%</div>
                   <div className="text-sm text-muted-foreground">Ready for Export</div>
                 </div>
                 <div className="text-center">
@@ -159,7 +219,7 @@ const Analytics = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground mb-1">347</div>
+              <div className="text-3xl font-bold text-foreground mb-1">{analyticsData.totalBatches}</div>
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-trust-green" />
                 <span className="text-sm text-trust-green">+12% vs last month</span>
@@ -175,7 +235,7 @@ const Analytics = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-trust-green mb-1">94%</div>
+              <div className="text-3xl font-bold text-trust-green mb-1">{analyticsData.exportReadyPercentage}%</div>
               <div className="text-sm text-muted-foreground">Above industry standard</div>
             </CardContent>
           </Card>
@@ -219,7 +279,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="h-80">
-                <Bar data={batchesHarvestedData} options={chartOptions} />
+                <Bar data={analyticsData.batchesHarvestedData} options={chartOptions} />
               </div>
             </CardContent>
           </Card>
@@ -234,7 +294,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="h-80 flex items-center justify-center">
-                <Doughnut data={complianceData} options={pieOptions} />
+                <Doughnut data={analyticsData.complianceData} options={pieOptions} />
               </div>
             </CardContent>
           </Card>
@@ -249,7 +309,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="h-80">
-                <Line data={exportReadinessData} options={chartOptions} />
+                <Line data={analyticsData.exportReadinessData} options={chartOptions} />
               </div>
             </CardContent>
           </Card>

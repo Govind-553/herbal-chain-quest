@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Sprout, Save, Send, Wifi, WifiOff } from "lucide-react";
+import axios from "axios";
+
+const API_BASE_URL = "http://localhost:3000";
 
 const species = [
   "Tulsi (Holy Basil)",
@@ -28,6 +31,14 @@ const locations = [
   "Uttarakhand - Haridwar District"
 ];
 
+// Mock sensor data generation for UI display
+const generateSensorData = () => ({
+  moistureLevel: Math.round(12 + Math.random() * 8), // 12-20%
+  pesticideLevel: Math.round(Math.random() * 3), // 0-3 ppm (safe range)
+  temperature: Math.round(22 + Math.random() * 8), // 22-30°C
+  humidity: Math.round(45 + Math.random() * 15) // 45-60%
+});
+
 const FarmerDashboard = () => {
   const { toast } = useToast();
   const [isOffline, setIsOffline] = useState(false);
@@ -39,16 +50,14 @@ const FarmerDashboard = () => {
     notes: ""
   });
   const [generatedBatchId, setGeneratedBatchId] = useState("");
+  const [sensorData, setSensorData] = useState(generateSensorData());
 
-  // Mock sensor data generation
-  const generateSensorData = () => ({
-    moistureLevel: Math.round(12 + Math.random() * 8), // 12-20%
-    pesticideLevel: Math.round(Math.random() * 3), // 0-3 ppm (safe range)
-    temperature: Math.round(22 + Math.random() * 8), // 22-30°C
-    humidity: Math.round(45 + Math.random() * 15) // 45-60%
-  });
+  useEffect(() => {
+    // This effect runs once when the component mounts to set initial sensor data
+    setSensorData(generateSensorData());
+  }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.species || !formData.harvestDate || !formData.location || !formData.quantity) {
       toast({
         title: "Missing Information",
@@ -58,14 +67,24 @@ const FarmerDashboard = () => {
       return;
     }
 
-    const sensorData = generateSensorData();
-    const batchId = `AYR-${Date.now().toString(36).toUpperCase()}`;
-    setGeneratedBatchId(batchId);
-    
-    toast({
-      title: "Harvest Data Submitted Successfully",
-      description: `Batch ID: ${batchId} has been generated.`,
-    });
+    try {
+      const res = await axios.post(`${API_BASE_URL}/collector`, formData);
+      
+      setGeneratedBatchId(res.data.batchId);
+      
+      toast({
+        title: "Harvest Data Submitted Successfully",
+        description: `Batch ID: ${res.data.batchId} has been generated.`,
+      });
+
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Submission Failed",
+        description: "There was an error submitting your data. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleSaveDraft = () => {
@@ -217,25 +236,25 @@ const FarmerDashboard = () => {
                   <div className="bg-muted p-4 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground">Moisture Level</p>
                     <p className="text-xl font-semibold text-primary">
-                      {generateSensorData().moistureLevel}%
+                      {sensorData.moistureLevel}%
                     </p>
                   </div>
                   <div className="bg-muted p-4 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground">Pesticide Level</p>
                     <p className="text-xl font-semibold text-trust-green">
-                      {generateSensorData().pesticideLevel} ppm
+                      {sensorData.pesticideLevel} ppm
                     </p>
                   </div>
                   <div className="bg-muted p-4 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground">Temperature</p>
                     <p className="text-xl font-semibold text-accent">
-                      {generateSensorData().temperature}°C
+                      {sensorData.temperature}°C
                     </p>
                   </div>
                   <div className="bg-muted p-4 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground">Humidity</p>
                     <p className="text-xl font-semibold text-secondary-foreground">
-                      {generateSensorData().humidity}%
+                      {sensorData.humidity}%
                     </p>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { TrustBadge } from "@/components/TrustBadge";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { FlaskConical, Search, CheckCircle } from "lucide-react";
+import { FlaskConical, CheckCircle, Cloud, HardDrive } from "lucide-react";
+import axios from "axios";
+
+const API_BASE_URL = "http://localhost:3000";
 
 type TrustLevel = "green" | "yellow" | "red";
+
+interface BatchData {
+  batchId: string;
+  species: string;
+  farmer: { name: string, location: string };
+  harvestDate: string;
+  labTest: { trustBadge: TrustLevel; date: string; pesticideResult: string };
+  isFinalized: boolean;
+}
+
+// Updated interface to match the data structure used for rendering
+interface RecentTestItem {
+  id: string;
+  species: string;
+  trust: TrustLevel;
+}
+
+const mockTests: RecentTestItem[] = [
+  { id: "AYR-XYZ789", species: "Tulsi", trust: "green" as TrustLevel },
+  { id: "AYR-ABC456", species: "Ashwagandha", trust: "yellow" as TrustLevel },
+  { id: "AYR-DEF123", species: "Turmeric", trust: "green" as TrustLevel }
+];
 
 const LabDashboard = () => {
   const { toast } = useToast();
@@ -23,36 +48,52 @@ const LabDashboard = () => {
   });
   const [computedTrust, setComputedTrust] = useState<TrustLevel | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [recentTests, setRecentTests] = useState(mockTests);
 
-  const computeTrustBadge = () => {
-    const moisture = parseFloat(testResults.moistureLevel);
-    const pesticide = testResults.pesticideResult;
-    const heavyMetals = parseFloat(testResults.heavyMetals);
-    const microbial = parseFloat(testResults.microbialCount);
-    const activeCompounds = parseFloat(testResults.activeCompounds);
-
-    // Trust badge computation logic
-    const criticalFailures = [
-      pesticide === "fail",
-      heavyMetals > 10, // ppm threshold
-      microbial > 100000 // cfu/g threshold  
-    ];
-
-    const minorIssues = [
-      moisture > 15 || moisture < 8, // Outside optimal range
-      activeCompounds < 2 // Below minimum potency
-    ];
-
-    if (criticalFailures.some(Boolean)) {
-      return "red";
-    } else if (minorIssues.some(Boolean)) {
-      return "yellow"; 
-    } else {
-      return "green";
+  const fetchRecentTests = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/dashboard/regulator`);
+      const fetchedBatches = res.data.batches
+        .filter((b: any) => b.labTest)
+        .map((b: any) => ({
+          id: b.batchId,
+          species: b.species,
+          trust: b.labTest.trustBadge,
+        }));
+      setRecentTests(fetchedBatches);
+    } catch (error) {
+      console.error("Error fetching recent lab tests:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not fetch live data. Displaying static data.",
+        variant: "destructive",
+      });
+      setIsLiveMode(false);
+      setRecentTests(mockTests);
     }
   };
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    if (isLiveMode) {
+      fetchRecentTests();
+    } else {
+      setRecentTests(mockTests);
+    }
+  }, [isLiveMode, isSubmitted]); // Re-fetch when submitted in live mode
+
+  const toggleLiveMode = () => {
+    setIsLiveMode(prev => {
+      const newMode = !prev;
+      toast({
+        title: newMode ? "Live Data Activated" : "Static Data Activated",
+        description: newMode ? "Fetching data from the backend." : "Switched to local mock data.",
+      });
+      return newMode;
+    });
+  };
+
+  const handleSubmit = async () => {
     if (!batchId || !testResults.moistureLevel || !testResults.pesticideResult) {
       toast({
         title: "Missing Information",
@@ -62,14 +103,25 @@ const LabDashboard = () => {
       return;
     }
 
-    const trustLevel = computeTrustBadge();
-    setComputedTrust(trustLevel);
-    setIsSubmitted(true);
-    
-    toast({
-      title: "Lab Results Submitted",
-      description: `Trust badge computed and submitted to /labtest API.`,
-    });
+    try {
+      const res = await axios.post(`${API_BASE_URL}/labtest`, { batchId, testResults });
+      
+      setComputedTrust(res.data.trustBadge);
+      setIsSubmitted(true);
+      
+      toast({
+        title: "Lab Results Submitted",
+        description: `Trust badge computed and submitted to the blockchain.`,
+      });
+      
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Submission Failed",
+        description: "An error occurred while submitting test results.",
+        variant: "destructive"
+      });
+    }
   };
 
   const resetForm = () => {
@@ -89,15 +141,24 @@ const LabDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
       <div className="container mx-auto p-6 pt-[72px]">
-        <div className="flex items-center gap-3 mb-8">
-          <FlaskConical className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Lab Dashboard</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <FlaskConical className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold">Lab Dashboard</h1>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleLiveMode}
+            className="flex items-center gap-2"
+          >
+            {isLiveMode ? <Cloud className="h-4 w-4" /> : <HardDrive className="h-4 w-4" />}
+            {isLiveMode ? "Live Data" : "Static Data"}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Lab Test Entry Form */}
           <Card>
             <CardHeader>
               <CardTitle>Enter Lab Test Results</CardTitle>
@@ -116,15 +177,12 @@ const LabDashboard = () => {
                     onChange={(e) => setBatchId(e.target.value)}
                     className="flex-1"
                   />
-                  <Button variant="outline" size="icon">
-                    <Search className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="moisture">Moisture Level (%) *</Label>
+                  <Label htmlFor="moisture">Moisture Level (%)*</Label>
                   <Input
                     id="moisture"
                     type="number"
@@ -200,7 +258,6 @@ const LabDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Trust Badge Display */}
           <div className="space-y-6">
             {computedTrust && (
               <Card className="border-2 border-primary">
@@ -224,7 +281,6 @@ const LabDashboard = () => {
               </Card>
             )}
 
-            {/* Test Standards Reference */}
             <Card>
               <CardHeader>
                 <CardTitle>Quality Standards Reference</CardTitle>
@@ -255,18 +311,13 @@ const LabDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Recent Tests */}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Lab Tests</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {[
-                    { id: "AYR-XYZ789", species: "Tulsi", trust: "green" as TrustLevel },
-                    { id: "AYR-ABC456", species: "Ashwagandha", trust: "yellow" as TrustLevel },
-                    { id: "AYR-DEF123", species: "Turmeric", trust: "green" as TrustLevel }
-                  ].map((test) => (
+                  {recentTests.map((test) => (
                     <div key={test.id} className="flex items-center justify-between p-3 border border-border rounded">
                       <div>
                         <p className="font-semibold text-sm">{test.id}</p>

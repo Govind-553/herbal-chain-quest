@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,8 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Package, QrCode, CheckCircle, Clock, Search, Download, X } from "lucide-react";
+import { Package, QrCode, CheckCircle, Clock, Download, X } from "lucide-react";
 import QRCode from "react-qr-code";
+import axios from "axios";
+
+const API_BASE_URL = "http://localhost:3000";
 
 interface ProcessingStep {
   id: string;
@@ -18,45 +21,109 @@ interface ProcessingStep {
   notes?: string;
 }
 
+// Corrected interface to match the data being used in the JSX
+interface ProcessedBatch {
+  id: string;
+  status: "Complete" | "In Progress" | "Not Ready";
+  date: string;
+}
+
 const ProcessorDashboard = () => {
   const { toast } = useToast();
   const [batchId, setBatchId] = useState("");
   const [qrCodeData, setQrCodeData] = useState("");
   const [isFinalized, setIsFinalized] = useState(false);
+  const [recentBatches, setRecentBatches] = useState<ProcessedBatch[]>([]);
   const qrCodeRef = useRef(null);
 
-  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([
+  const initialProcessingSteps: ProcessingStep[] = [
     { id: "drying", name: "Drying", completed: false },
     { id: "cleaning", name: "Cleaning & Sorting", completed: false },
     { id: "grinding", name: "Grinding/Processing", completed: false },
     { id: "packaging", name: "Packaging", completed: false },
     { id: "labeling", name: "Labeling", completed: false },
     { id: "quality_check", name: "Final Quality Check", completed: false }
-  ]);
+  ];
+  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>(initialProcessingSteps);
 
-  const toggleStep = (stepId: string) => {
-    setProcessingSteps(prev => 
-      prev.map(step => 
-        step.id === stepId 
-          ? { 
-              ...step, 
-              completed: !step.completed,
-              timestamp: !step.completed ? new Date().toLocaleString() : undefined
-            }
-          : step
-      )
+  useEffect(() => {
+    const fetchRecentBatches = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/dashboard/regulator`);
+        const processed = res.data.batches
+          .filter((b: any) => b.isFinalized)
+          .map((b: any) => ({
+            id: b.batchId,
+            status: "Complete",
+            date: b.qrGenerated ? new Date(b.qrGenerated).toLocaleDateString() : 'N/A'
+          }));
+        setRecentBatches(processed);
+      } catch (error) {
+        console.error("Error fetching recent batches:", error);
+        setRecentBatches([]);
+      }
+    };
+
+    fetchRecentBatches();
+  }, [isFinalized]);
+
+  const toggleStep = async (stepId: string) => {
+    const stepToUpdate = processingSteps.find(step => step.id === stepId);
+    if (!stepToUpdate) return;
+    
+    const updatedCompletedState = !stepToUpdate.completed;
+    const updatedSteps = processingSteps.map(step => 
+      step.id === stepId ? { ...step, completed: updatedCompletedState, timestamp: updatedCompletedState ? new Date().toISOString() : undefined } : step
     );
+    
+    setProcessingSteps(updatedSteps);
+
+    try {
+      await axios.post(`${API_BASE_URL}/processor`, {
+        batchId,
+        stepName: stepToUpdate.name,
+        completed: updatedCompletedState,
+      });
+      
+      toast({
+        title: "Processing Step Updated",
+        description: `Step '${stepToUpdate.name}' has been marked as ${updatedCompletedState ? 'completed' : 'incomplete'}.`
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Update Failed",
+        description: "Could not update the processing step on the server.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const addStepNotes = (stepId: string, notes: string) => {
-    setProcessingSteps(prev =>
-      prev.map(step =>
-        step.id === stepId ? { ...step, notes } : step
-      )
+  const addStepNotes = async (stepId: string, notes: string) => {
+    const updatedSteps = processingSteps.map(step =>
+      step.id === stepId ? { ...step, notes } : step
     );
+    setProcessingSteps(updatedSteps);
+
+    try {
+      const stepToUpdate = updatedSteps.find(step => step.id === stepId);
+      await axios.post(`${API_BASE_URL}/processor`, {
+        batchId,
+        stepName: stepToUpdate?.name,
+        notes,
+      });
+
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Notes Update Failed",
+        description: "Could not save notes to the server.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const generateQRCode = () => {
+  const generateQRCode = async () => {
     if (!batchId) {
       toast({
         title: "Missing Batch ID",
@@ -76,20 +143,25 @@ const ProcessorDashboard = () => {
       return;
     }
 
-    const qrData = JSON.stringify({
-      batchId,
-      url: `https://ayurchain.app/consumer?batch=${batchId}`,
-      timestamp: new Date().toISOString(),
-      processor: "AyurChain Certified Processor"
-    });
-
-    setQrCodeData(qrData);
-    setIsFinalized(true);
-    
-    toast({
-      title: "QR Code Generated Successfully",
-      description: `QR code for batch ${batchId} is ready for scanning.`,
-    });
+    try {
+      const res = await axios.post(`${API_BASE_URL}/processor/qrcode`, { batchId });
+      
+      const qrData = JSON.stringify(res.data.qrData);
+      setQrCodeData(qrData);
+      setIsFinalized(true);
+      
+      toast({
+        title: "QR Code Generated Successfully",
+        description: `QR code for batch ${batchId} is ready for scanning.`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "QR Code Generation Failed",
+        description: "An error occurred during QR code generation.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDownloadQR = () => {
@@ -102,7 +174,6 @@ const ProcessorDashboard = () => {
       return;
     }
     
-    // Find the SVG element and create a canvas element to draw it to
     const svgElement = qrCodeRef.current.querySelector('svg');
     if (!svgElement) {
         toast({
@@ -122,16 +193,14 @@ const ProcessorDashboard = () => {
     const ctx = canvas.getContext('2d');
     const img = new Image();
 
-    // Use a temporary URL to load the SVG onto the canvas
     const svgString = new XMLSerializer().serializeToString(svgElement);
     const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     
     img.onload = () => {
-      ctx.drawImage(img, 0, 0);
+      ctx?.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
       
-      // Convert the canvas content to a PNG data URL
       const pngUrl = canvas.toDataURL("image/png");
       
       const downloadLink = document.createElement("a");
@@ -153,9 +222,7 @@ const ProcessorDashboard = () => {
     setBatchId("");
     setQrCodeData("");
     setIsFinalized(false);
-    setProcessingSteps(prev => 
-      prev.map(step => ({ ...step, completed: false, timestamp: undefined, notes: undefined }))
-    );
+    setProcessingSteps(initialProcessingSteps);
   };
 
   const completedSteps = processingSteps.filter(step => step.completed).length;
@@ -165,7 +232,6 @@ const ProcessorDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
       <div className="container mx-auto p-6 pt-[72px]">
         <div className="flex items-center gap-3 mb-8">
           <Package className="h-8 w-8 text-primary" />
@@ -173,7 +239,6 @@ const ProcessorDashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Processing Control Panel */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -185,29 +250,24 @@ const ProcessorDashboard = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="batchId">Batch ID</Label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1 flex items-center">
-                      <Input
-                        id="batchId"
-                        placeholder="e.g., AYR-ABC123"
-                        value={batchId}
-                        onChange={(e) => setBatchId(e.target.value)}
-                        className="pr-8"
-                      />
-                      {batchId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={handleClear}
-                          className="absolute right-1 w-7 h-7"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    <Button variant="outline" size="icon">
-                      <Search className="h-4 w-4" />
-                    </Button>
+                  <div className="relative flex items-center">
+                    <Input
+                      id="batchId"
+                      placeholder="e.g., AYR-ABC123"
+                      value={batchId}
+                      onChange={(e) => setBatchId(e.target.value)}
+                      className="pr-8"
+                    />
+                    {batchId && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleClear}
+                        className="absolute right-1 w-7 h-7"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -228,7 +288,6 @@ const ProcessorDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Processing Steps */}
             <Card>
               <CardHeader>
                 <CardTitle>Processing Steps</CardTitle>
@@ -279,7 +338,6 @@ const ProcessorDashboard = () => {
             </Card>
           </div>
 
-          {/* QR Code Generation */}
           <div className="space-y-6">
             {qrCodeData ? (
               <Card className="border-2 border-primary">
@@ -341,7 +399,6 @@ const ProcessorDashboard = () => {
               </Card>
             )}
 
-            {/* Processing Info */}
             <Card>
               <CardHeader>
                 <CardTitle>Processing Guidelines</CardTitle>
@@ -366,18 +423,13 @@ const ProcessorDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Recent Batches */}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Processed Batches</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {[
-                    { id: "AYR-XYZ789", status: "Complete", date: "2024-01-15" },
-                    { id: "AYR-ABC456", status: "In Progress", date: "2024-01-14" },
-                    { id: "AYR-DEF123", status: "Complete", date: "2024-01-13" }
-                  ].map((batch) => (
+                  {recentBatches.map((batch) => (
                     <div key={batch.id} className="flex items-center justify-between p-3 border border-border rounded">
                       <div>
                         <p className="font-semibold text-sm">{batch.id}</p>

@@ -1,89 +1,130 @@
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { TrustBadge } from "@/components/TrustBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Download, Filter, TrendingUp, CheckCircle2 } from "lucide-react";
+import { Shield, Download, Filter, TrendingUp, CheckCircle2, Cloud, HardDrive } from "lucide-react";
+import axios from "axios";
+import { useToast } from "@/components/ui/use-toast";
+
+const API_BASE_URL = "http://localhost:3000";
 
 type TrustLevel = "green" | "yellow" | "red";
 
 interface BatchData {
   batchId: string;
   species: string;
-  farmer: string;
-  location: string;
+  farmer: { name: string, location: string };
   harvestDate: string;
-  trustBadge: TrustLevel;
-  exportReady: boolean;
-  labTestDate: string;
+  labTest: { trustBadge: TrustLevel };
+  isFinalized: boolean;
 }
 
 const mockBatches: BatchData[] = [
   {
     batchId: "AYR-XYZ789",
     species: "Tulsi",
-    farmer: "Rajesh Kumar", 
-    location: "Kerala - Wayanad",
+    farmer: { name: "Rajesh Kumar", location: "Kerala - Wayanad" },
     harvestDate: "2024-01-10",
-    trustBadge: "green",
-    exportReady: true,
-    labTestDate: "2024-01-12"
+    labTest: { trustBadge: "green" },
+    isFinalized: true,
   },
   {
     batchId: "AYR-ABC456",
     species: "Ashwagandha",
-    farmer: "Priya Sharma",
-    location: "Rajasthan - Jaisalmer", 
+    farmer: { name: "Priya Sharma", location: "Rajasthan - Jaisalmer" },
     harvestDate: "2024-01-08",
-    trustBadge: "yellow",
-    exportReady: false,
-    labTestDate: "2024-01-11"
+    labTest: { trustBadge: "yellow" },
+    isFinalized: false,
   },
   {
     batchId: "AYR-DEF123", 
     species: "Turmeric",
-    farmer: "Mohan Singh",
-    location: "Karnataka - Mysore",
+    farmer: { name: "Mohan Singh", location: "Karnataka - Mysore" },
     harvestDate: "2024-01-05",
-    trustBadge: "green",
-    exportReady: true,
-    labTestDate: "2024-01-08"
+    labTest: { trustBadge: "green" },
+    isFinalized: true,
   },
   {
     batchId: "AYR-GHI012",
     species: "Neem",
-    farmer: "Sunita Devi",
-    location: "Madhya Pradesh - Indore",
+    farmer: { name: "Sunita Devi", location: "Madhya Pradesh - Indore" },
     harvestDate: "2024-01-03",
-    trustBadge: "red",
-    exportReady: false,
-    labTestDate: "2024-01-06"
+    labTest: { trustBadge: "red" },
+    isFinalized: false,
   },
   {
     batchId: "AYR-JKL345",
     species: "Tulsi",
-    farmer: "Arjun Patel", 
-    location: "Tamil Nadu - Nilgiris",
+    farmer: { name: "Arjun Patel", location: "Tamil Nadu - Nilgiris" },
     harvestDate: "2024-01-01",
-    trustBadge: "green",
-    exportReady: true,
-    labTestDate: "2024-01-04"
+    labTest: { trustBadge: "green" },
+    isFinalized: true,
   }
 ];
 
 const RegulatorDashboard = () => {
-  const totalBatches = mockBatches.length;
-  const exportReadyBatches = mockBatches.filter(batch => batch.exportReady).length;
-  const exportReadyPercentage = Math.round((exportReadyBatches / totalBatches) * 100);
+  const [batches, setBatches] = useState<BatchData[]>(mockBatches);
+  const [filterBy, setFilterBy] = useState("all");
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const { toast } = useToast();
+
+  const fetchBatches = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/dashboard/regulator`);
+      const fetchedBatches = res.data.batches.map((b: any) => ({
+        ...b,
+        exportReady: b.labTest?.trustBadge === "green",
+        location: b.farmer?.location,
+        trustBadge: b.labTest?.trustBadge,
+      }));
+      setBatches(fetchedBatches);
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not fetch live data. Displaying static data.",
+        variant: "destructive",
+      });
+      setBatches(mockBatches);
+    }
+  };
+
+  useEffect(() => {
+    if (isLiveMode) {
+      fetchBatches();
+    } else {
+      setBatches(mockBatches);
+    }
+  }, [isLiveMode]);
+
+  const toggleLiveMode = () => {
+    setIsLiveMode(prev => {
+      const newMode = !prev;
+      return newMode;
+    });
+  };
+
+  const filteredBatches = batches.filter(batch => {
+    if (filterBy === "all") return true;
+    if (filterBy === "green") return batch.labTest?.trustBadge === "green";
+    if (filterBy === "yellow") return batch.labTest?.trustBadge === "yellow";
+    if (filterBy === "red") return batch.labTest?.trustBadge === "red";
+    return true;
+  });
+
+  const totalBatches = filteredBatches.length;
+  const exportReadyBatches = filteredBatches.filter(batch => batch.isFinalized).length;
+  const exportReadyPercentage = totalBatches > 0 ? Math.round((exportReadyBatches / totalBatches) * 100) : 0;
   
-  const tulsiExportReady = mockBatches.filter(batch => 
-    batch.species === "Tulsi" && batch.exportReady
+  const tulsiExportReady = filteredBatches.filter(batch => 
+    batch.species === "Tulsi" && batch.isFinalized
   ).length;
-  const totalTulsi = mockBatches.filter(batch => batch.species === "Tulsi").length;
-  const tulsiPercentage = Math.round((tulsiExportReady / totalTulsi) * 100);
+  const totalTulsi = filteredBatches.filter(batch => batch.species === "Tulsi").length;
+  const tulsiPercentage = totalTulsi > 0 ? Math.round((tulsiExportReady / totalTulsi) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,9 +132,20 @@ const RegulatorDashboard = () => {
       
       {/* The padding top class 'pt-[72px]' prevents content from being hidden by the fixed header */}
       <div className="container mx-auto p-6 pt-[72px]">
-        <div className="flex items-center gap-3 mb-8">
-          <Shield className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Regulator Dashboard</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Shield className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold">Regulator Dashboard</h1>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleLiveMode}
+            className="flex items-center gap-2"
+          >
+            {isLiveMode ? <Cloud className="h-4 w-4" /> : <HardDrive className="h-4 w-4" />}
+            {isLiveMode ? "Live Data" : "Static Data"}
+          </Button>
         </div>
 
         {/* Key Metrics */}
@@ -147,17 +199,17 @@ const RegulatorDashboard = () => {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between flex-wrap gap-2">
                   <div>
                     <CardTitle>Batch Compliance Overview</CardTitle>
                     <CardDescription>
                       All registered batches with trust badge status and export readiness.
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
-                    <Select defaultValue="all">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={filterBy} onValueChange={setFilterBy}>
                       <SelectTrigger className="w-32">
-                        <SelectValue />
+                        <SelectValue placeholder="All Batches" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Batches</SelectItem>
@@ -166,10 +218,6 @@ const RegulatorDashboard = () => {
                         <SelectItem value="red">Non-Compliant</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm">
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filter
-                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -185,18 +233,18 @@ const RegulatorDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockBatches.map((batch) => (
+                    {filteredBatches.map((batch) => (
                       <TableRow key={batch.batchId}>
                         <TableCell className="font-mono font-semibold">
                           {batch.batchId}
                         </TableCell>
                         <TableCell>{batch.species}</TableCell>
-                        <TableCell className="text-sm">{batch.location}</TableCell>
+                        <TableCell className="text-sm">{batch.farmer.location}</TableCell>
                         <TableCell>
-                          <TrustBadge level={batch.trustBadge} />
+                          {batch.labTest?.trustBadge && <TrustBadge level={batch.labTest.trustBadge} />}
                         </TableCell>
                         <TableCell>
-                          {batch.exportReady ? (
+                          {batch.isFinalized ? (
                             <Badge className="bg-trust-green text-white">
                               <CheckCircle2 className="h-3 w-3 mr-1" />
                               Ready
@@ -232,7 +280,7 @@ const RegulatorDashboard = () => {
                   </p>
                   <div className="bg-muted p-3 rounded-lg text-sm">
                     <p className="font-semibold mb-1">National Impact:</p>
-                    <p>Total herbs this season: 5,000 kg</p>
+                    <p>Total batches: {totalBatches}</p>
                     <p>{exportReadyPercentage}% ready for international export</p>
                   </div>
                 </div>
