@@ -11,6 +11,8 @@ import RegulatorDashboard from "./pages/RegulatorDashboard";
 import ConsumerPortal from "./pages/ConsumerPortal";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
+import Footer from "./components/Footer";
+import ScrollToTop from "./components/ScrollToTop"; // Import the new ScrollToTop component
 
 const queryClient = new QueryClient();
 
@@ -20,17 +22,23 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/farmer" element={<FarmerDashboard />} />
-          <Route path="/lab" element={<LabDashboard />} />
-          <Route path="/processor" element={<ProcessorDashboard />} />
-          <Route path="/regulator" element={<RegulatorDashboard />} />
-          <Route path="/consumer" element={<ConsumerPortal />} />
-          <Route path="/analytics" element={<Analytics />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <ScrollToTop /> {/* Add the ScrollToTop component here */}
+        <div className="flex flex-col min-h-screen">
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/farmer" element={<FarmerDashboard />} />
+              <Route path="/lab" element={<LabDashboard />} />
+              <Route path="/processor" element={<ProcessorDashboard />} />
+              <Route path="/regulator" element={<RegulatorDashboard />} />
+              <Route path="/consumer" element={<ConsumerPortal />} />
+              <Route path="/analytics" element={<Analytics />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
